@@ -1,0 +1,14 @@
+//
+// Created by Glitch on 07/04/2025.
+//
+
+#ifndef DININGPHILOSOPHERS_PREVENTSTARVATION_H
+#define DININGPHILOSOPHERS_PREVENTSTARVATION_H
+
+
+class PreventStarvation {
+
+};
+
+
+#endif //DININGPHILOSOPHERS_PREVENTSTARVATION_H
