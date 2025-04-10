@@ -6,9 +6,9 @@
 #define DININGPHILOSOPHERS_PREVENTDEADLOCK_H
 
 
-class PreventDeadLock {
-
-};
+// rozwiazanie zapobiegajace zakleszczeniu
+// nie zapobiega zaglodzeniu
+void prevent_deadlock(int id, int leftChopstick, int rightChopstick);
 
 
 #endif //DININGPHILOSOPHERS_PREVENTDEADLOCK_H
