@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "PreventDeadLock.h"
+#include "PreventStarvation.h"
 
 // semafory jako paleczki filozofow
 sem_t * chopsticks;
@@ -21,9 +22,9 @@ pthread_t * philosophers;
 int choice = 0;
 
 enum OPTIONS{
-    PREVENT_DEADLOCK,
-    PREVENT_STARVATION,
-    PREVENT_STARVATION_AND_DEADLOCK
+    PREVENT_DEADLOCK = 2,
+    PREVENT_STARVATION = 1,
+    PREVENT_STARVATION_AND_DEADLOCK = 3
 };
 
 
@@ -51,15 +52,15 @@ void *philosophy(void *arg){
 
 
     switch (choice) {
-        case 1: // PREVENT_DEADLOCK
+        case PREVENT_DEADLOCK: // PREVENT_DEADLOCK
             prevent_deadlock(id, leftChopstick, rightChopstick);
             break;
 
-//        case 2: // PREVENT_STARVATION
-//            prevent_starvation(id, leftChopstick, rightChopstick);
-//            break;
-//
-//        case 3: // PREVENT_STARVATION_AND_DEADLOCK
+        case PREVENT_STARVATION: // PREVENT_STARVATION
+            prevent_starvation(id, leftChopstick, rightChopstick);
+            break;
+
+//        case PREVENT_STARVATION_AND_DEADLOCK: // PREVENT_STARVATION_AND_DEADLOCK
 //            prevent_starvation_deadlock(id, leftChopstick, rightChopstick);
 //            break;
 

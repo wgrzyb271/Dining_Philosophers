@@ -12,7 +12,7 @@
 
 
 // rowiazanie z hierarchia zasobow
-// filozof podnosi najpierw paleczke z najniszym dostepnym numerem
+// filozof podnosi najpierw paleczke z najniszym dostepnym numerem - zapobiega zakleszczeniu
 void prevent_deadlock(int id, int leftChopstick, int rightChopstick){
     while (true){
 
