@@ -5,10 +5,13 @@
 #ifndef DININGPHILOSOPHERS_PREVENTSTARVATION_H
 #define DININGPHILOSOPHERS_PREVENTSTARVATION_H
 
+//extern int no_philosophers;
 
-class PreventStarvation {
 
-};
+void* prevent_starvation(void* arg);
+bool isPhilosopherInQueue(int i);
+
+void init_structures();
 
 
 #endif //DININGPHILOSOPHERS_PREVENTSTARVATION_H
