@@ -1,4 +1,4 @@
-// zapobieganie zakleszczeniu
+// zapobieganie zaglodzeniu
 
 #include "PreventStarvation.h"
 #include <ncurses.h>
