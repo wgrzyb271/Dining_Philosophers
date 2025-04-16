@@ -1,6 +1,4 @@
-//
-// Created by Glitch on 07/04/2025.
-//
+// zapobieganie zakleszczeniu i zaglodzeniu
 
 #include <ncurses.h>
 #include <unistd.h>
