@@ -1,4 +1,6 @@
-#include "PreventStarvationDeadLock.h"
+
+// zapobieganie zakleszczeniu i zaglodzeniu
+
 
 #include <ncurses.h>
 #include <unistd.h>

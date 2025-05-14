@@ -202,6 +202,7 @@ bool isPhilosopherInQueue(int i){
     return false;
 }
 
+
 void draw_interface() {
     sem_wait(&screen_lock);
     erase();
@@ -256,3 +257,4 @@ void pause_barrier() {
         sleep(2);
     }
 }
+
