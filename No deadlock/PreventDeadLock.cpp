@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include <random>
-#include <deque>
 #include <iostream>
 #include <cstring>
 
