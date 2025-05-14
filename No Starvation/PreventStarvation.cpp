@@ -32,8 +32,6 @@ enum StatusColor {
 
 // tablica okreslajaca aktualny stan danego filozofa
 int philosopherState[PHILOSOPHERS];
-// kolejka zawierajaca glodnych filozofow (w stanie HUNGRY)
-std::deque<int> hungerQueue;
 // tablica przechowujaca czas kiedy filozof ostatnio jadl
 time_t last_ate[PHILOSOPHERS];
 // mutex dotyczacy kolejki
@@ -192,14 +190,6 @@ void* prevent_starvation(void* arg) {
     }
 
     return NULL;
-}
-
-
-bool isPhilosopherInQueue(int i){
-    for (int current: hungerQueue)
-        if (current == i) return true;
-
-    return false;
 }
 
 
