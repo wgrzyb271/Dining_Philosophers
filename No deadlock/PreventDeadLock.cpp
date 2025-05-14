@@ -1,103 +1,54 @@
 // zapobieganie zakleszczeniu
 
+#include "PreventDeadLock.h"
 
 #include <ncurses.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
-#include <stdarg.h>
 #include <random>
+#include <deque>
+#include <iostream>
+#include <cstring>
 
 #define PHILOSOPHERS 5
+#define NO_EATING_TIME 5
 
 sem_t chopsticks[PHILOSOPHERS];
 sem_t screen_lock;
 
 bool running = true;
+bool paused = false;
 bool colors_enabled = false;
 
 enum StatusColor {
-    THINKING,
+    THINKING = 1,
     EATING,
-    RELEASING,
-    DEFAULT_COLOR
+    HUNGRY,
+    STARVING,
+    HOLDING,
+    CHOPSTICK_FREE,
+    CHOPSTICK_USED
 };
 
-// Funkcja generujaca losowa liczbe calkowita z przedzialu [a, b]
-int random_between(int a, int b) {
-    static std::random_device rd;
-    static std::mt19937 gen(rd()); // generator Mersenne Twister
-    std::uniform_int_distribution<> dist(a, b);
-    return dist(gen);
-}
+// tablica okreslajaca aktualny stan danego filozofa
+int philosopherState[PHILOSOPHERS];
+// kolejka zawierajaca glodnych filozofow (w stanie HUNGRY)
+std::deque<int> hungerQueue;
+// tablica przechowujaca czas kiedy filozof ostatnio jadl
+time_t last_ate[PHILOSOPHERS];
+// mutex dotyczacy kolejki
+sem_t queueLock;
+sem_t general_lock;
 
-// Funkcja pomocnicza do bezpiecznego wypisywania
-void safe_print(int color, const char* format, ...) {
-    va_list args;
-    sem_wait(&screen_lock);
+char state[PHILOSOPHERS][4];
+// tablica zjedzonych posilkow
+int meals[PHILOSOPHERS];
+// tablica dostepnych paleczek
+bool chopstick_available[PHILOSOPHERS];
 
-    if (colors_enabled) {
-        attron(COLOR_PAIR(color));
-    }
-
-    va_start(args, format);
-    vw_printw(stdscr, format, args);
-    va_end(args);
-
-    if (colors_enabled) {
-        attroff(COLOR_PAIR(color));
-    }
-
-    refresh();
-    sem_post(&screen_lock);
-}
-
-// Funkcja filozofa z zapobieganiem zakleszczeniu
-void* philosopher_thread(void* arg) {
-    int id = *(int*)arg;
-    int left = (id + 1) % PHILOSOPHERS;
-    int right = id;
-
-    while (running) {
-        safe_print(THINKING, "Philosopher %d is thinking\n", id);
-        sleep(random_between(2, 5));
-
-        if (left < right) {
-            safe_print(RELEASING, "Philosopher %d is acquiring left chopstick (%d)\n", id, left);
-            sem_wait(&chopsticks[left]);
-
-            safe_print(RELEASING, "Philosopher %d is acquiring right chopstick (%d)\n", id, right);
-            sem_wait(&chopsticks[right]);
-        } else {
-            safe_print(RELEASING, "Philosopher %d is acquiring right chopstick (%d)\n", id, right);
-            sem_wait(&chopsticks[right]);
-
-            safe_print(RELEASING, "Philosopher %d is acquiring left chopstick (%d)\n", id, left);
-            sem_wait(&chopsticks[left]);
-        }
-
-        safe_print(EATING, "Philosopher %d is eating\n", id);
-        sleep(random_between(1, 4));
-
-        if (left < right) {
-            safe_print(RELEASING, "Philosopher %d is releasing right chopstick (%d)\n", id, right);
-            sem_post(&chopsticks[right]);
-
-            safe_print(RELEASING, "Philosopher %d is releasing left chopstick (%d)\n", id, left);
-            sem_post(&chopsticks[left]);
-        } else {
-            safe_print(RELEASING, "Philosopher %d is releasing left chopstick (%d)\n", id, left);
-            sem_post(&chopsticks[left]);
-
-            safe_print(RELEASING, "Philosopher %d is releasing right chopstick (%d)\n", id, right);
-            sem_post(&chopsticks[right]);
-        }
-
-        safe_print(RELEASING, "Philosopher %d released both chopsticks\n", id);
-    }
-
-    return NULL;
-}
+void draw_interface();
+void pause_barrier();
 
 int main() {
     pthread_t philosophers[PHILOSOPHERS];
@@ -105,47 +56,53 @@ int main() {
 
     initscr();
     cbreak();
-    scrollok(stdscr, TRUE);
     noecho();
     curs_set(FALSE);
-    keypad(stdscr, TRUE);
-
-//    timeout(0);
-
-    printw("Deadlock Prevention Simulation\n\n");
-    printw("Press any key to start Simulation (q or Q to exit)...\n\n");
-    int choice = getch();
-    if(choice == 'q' or choice == 'Q')
-        running = false;
-    clear();
     nodelay(stdscr, TRUE);
+    keypad(stdscr, TRUE);
 
     if (has_colors()) {
         start_color();
         init_pair(THINKING, COLOR_CYAN, COLOR_BLACK);
         init_pair(EATING, COLOR_GREEN, COLOR_BLACK);
-        init_pair(RELEASING, COLOR_YELLOW, COLOR_BLACK);
+        init_pair(STARVING, COLOR_RED, COLOR_BLACK);
+        init_pair(HOLDING, COLOR_YELLOW, COLOR_BLACK);
+        init_pair(CHOPSTICK_FREE, COLOR_WHITE, COLOR_BLACK);
+        init_pair(CHOPSTICK_USED, COLOR_MAGENTA, COLOR_BLACK);
         colors_enabled = true;
     } else {
         colors_enabled = false;
-        init_pair(DEFAULT_COLOR, COLOR_WHITE, COLOR_BLACK);
     }
 
+    printw("Starvation Prevention Simulation\n\n");
+    printw("Press any key to start Simulation (q or Q to exit)...\n\n");
+    int choice = getch();
+    if(choice == 'q' or choice == 'Q')
+        running = false;
+
     sem_init(&screen_lock, 0, 1);
+    sem_init(&queueLock, 0, 1);
+    sem_init(&general_lock, 0, 1);
     for (int i = 0; i < PHILOSOPHERS; ++i) {
         sem_init(&chopsticks[i], 0, 1);
+        philosopherState[i] = THINKING;
+        chopstick_available[i] = true;
+        meals[i] = 0;
+        strcpy(state[i], "T");
     }
 
     for (int i = 0; i < PHILOSOPHERS; ++i) {
         ids[i] = i;
-        pthread_create(&philosophers[i], NULL, philosopher_thread, &ids[i]);
+        pthread_create(&philosophers[i], NULL, prevent_deadlock, &ids[i]);
     }
 
     while (running) {
+        draw_interface();
+
         int ch = getch();
-        if (ch == 'q' || ch == 'Q') {
-            running = false;
-        }
+        if (ch == 'q' || ch == 'Q') running = false;
+        if (ch == ' ') paused = !paused;
+
         usleep(100000); // 0.1s
     }
 
@@ -153,11 +110,164 @@ int main() {
         pthread_join(philosophers[i], NULL);
     }
 
-    sem_destroy(&screen_lock);
+
     for (int i = 0; i < PHILOSOPHERS; ++i) {
         sem_destroy(&chopsticks[i]);
     }
 
+    sem_destroy(&screen_lock);
+    sem_destroy(&queueLock);
+    sem_destroy(&general_lock);
+
     endwin();
     return 0;
+}
+
+// Funkcja generujaca losowa liczbe calkowita z przedzialu [a, b]
+int random_between(int a, int b) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(a, b);
+    return dist(gen);
+}
+
+// Funkcja filozofa z zapobieganiem zakleszczeniu
+void* prevent_deadlock(void* arg) {
+    int id = *(int*)arg;
+    int left = (id + 1) % PHILOSOPHERS;
+    int right = id;
+
+    time_t now = -1;;
+    last_ate[id] = -1;
+
+    while (running) {
+
+        now = time(NULL);
+
+        if (last_ate[id] > 0 && difftime(now, last_ate[id]) >= NO_EATING_TIME)
+            strcpy(state[id], "S");
+        else {
+            // mysli
+            strcpy(state[id], "T");
+            sleep(random_between(2, 5));
+
+            // staje sie glodny
+            strcpy(state[id], "H");
+        }
+
+        // podnosi paleczki
+        if (left < right) {
+            sem_wait(&chopsticks[left]);
+            chopstick_available[left] = false;
+            strcpy(state[id], "L.");
+
+            sem_wait(&chopsticks[right]);
+            chopstick_available[right] = false;
+            strcpy(state[id], "LR");
+        } else {
+
+            sem_wait(&chopsticks[right]);
+            chopstick_available[right] = false;
+            strcpy(state[id], ".R");
+
+            sem_wait(&chopsticks[left]);
+            chopstick_available[left] = false;
+            strcpy(state[id], "LR");
+        }
+
+        // je
+        strcpy(state[id], "E");
+        meals[id]++;
+        sleep(random_between(1, 4));
+
+        // odklada paleczki
+        if (left < right) {
+
+            sem_post(&chopsticks[right]);
+            chopstick_available[right] = true;
+            strcpy(state[id], "L.");
+
+
+            sem_post(&chopsticks[left]);
+            chopstick_available[left] = true;
+            strcpy(state[id], "..");
+        } else {
+
+            sem_post(&chopsticks[left]);
+            chopstick_available[left] = true;
+            strcpy(state[id], ".R");
+
+
+            sem_post(&chopsticks[right]);
+            chopstick_available[right] = true;
+            strcpy(state[id], "..");
+        }
+
+
+    }
+
+    return NULL;
+}
+
+
+bool isPhilosopherInQueue(int i){
+    for (int current: hungerQueue)
+        if (current == i) return true;
+
+    return false;
+}
+
+void draw_interface() {
+    sem_wait(&screen_lock);
+    erase();
+
+    mvprintw(0, 0, "Dining Philosophers Simulation");
+    mvprintw(1, 0, "Press SPACE to pause/resume, Q to quit.\n");
+
+    for (int i = 0; i < PHILOSOPHERS; i++) {
+        mvprintw(3, i * 18, "Philosopher %d", i);
+        mvprintw(4, i * 18, "Meals: %d", meals[i]);
+
+        if (strcmp(state[i], "E") == 0) attron(COLOR_PAIR(EATING));
+        else if (strcmp(state[i], "T") == 0) attron(COLOR_PAIR(THINKING));
+        else if (strcmp(state[i], "S") == 0) attron(COLOR_PAIR(STARVING));
+        else if (strcmp(state[i], "LR") == 0) attron(COLOR_PAIR(HOLDING));
+        else attron(COLOR_PAIR(HOLDING));
+
+        mvprintw(5, i * 18, "State: %s", state[i]);
+        attroff(COLOR_PAIR(EATING));
+        attroff(COLOR_PAIR(THINKING));
+        attroff(COLOR_PAIR(STARVING));
+        attroff(COLOR_PAIR(HOLDING));
+    }
+
+    mvprintw(8, 0, "Available Chopsticks:");
+    for (int i = 0; i < PHILOSOPHERS; i++) {
+        if (chopstick_available[i])
+            attron(COLOR_PAIR(CHOPSTICK_FREE));
+        else
+            attron(COLOR_PAIR(CHOPSTICK_USED));
+
+        mvprintw(9, i * 12, "[%d] %-3s", i, chopstick_available[i] ? "YES" : "NO");
+        attroff(COLOR_PAIR(CHOPSTICK_FREE));
+        attroff(COLOR_PAIR(CHOPSTICK_USED));
+    }
+
+    mvprintw(11, 0, "Legend:\n");
+    attron(COLOR_PAIR(THINKING)); printw(" T "); attroff(COLOR_PAIR(THINKING)); printw(" - Thinking\n");
+    attron(COLOR_PAIR(EATING)); printw(" E "); attroff(COLOR_PAIR(EATING)); printw(" - Eating\n");
+    attron(COLOR_PAIR(STARVING)); printw(" S "); attroff(COLOR_PAIR(STARVING)); printw(" - Starving\n");
+    attron(COLOR_PAIR(HOLDING)); printw(" L/R "); attroff(COLOR_PAIR(HOLDING)); printw(" - Holding chopstick\n");
+
+    if (paused) mvprintw(17, 0, "-- PAUSED --");
+
+    refresh();
+    sem_post(&screen_lock);
+}
+
+
+void pause_barrier() {
+    while (paused && running) {
+        sleep(2);
+    }
 }

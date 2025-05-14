@@ -8,7 +8,7 @@
 
 // rozwiazanie zapobiegajace zakleszczeniu
 // nie zapobiega zaglodzeniu
-void prevent_deadlock(int id, int leftChopstick, int rightChopstick);
+void* prevent_deadlock(void* arg);
 
 
 #endif //DININGPHILOSOPHERS_PREVENTDEADLOCK_H
