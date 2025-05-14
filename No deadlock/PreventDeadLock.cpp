@@ -33,12 +33,8 @@ enum StatusColor {
 
 // tablica okreslajaca aktualny stan danego filozofa
 int philosopherState[PHILOSOPHERS];
-// kolejka zawierajaca glodnych filozofow (w stanie HUNGRY)
-std::deque<int> hungerQueue;
 // tablica przechowujaca czas kiedy filozof ostatnio jadl
 time_t last_ate[PHILOSOPHERS];
-// mutex dotyczacy kolejki
-sem_t queueLock;
 sem_t general_lock;
 
 char state[PHILOSOPHERS][4];
@@ -81,7 +77,6 @@ int main() {
         running = false;
 
     sem_init(&screen_lock, 0, 1);
-    sem_init(&queueLock, 0, 1);
     sem_init(&general_lock, 0, 1);
     for (int i = 0; i < PHILOSOPHERS; ++i) {
         sem_init(&chopsticks[i], 0, 1);
@@ -116,7 +111,6 @@ int main() {
     }
 
     sem_destroy(&screen_lock);
-    sem_destroy(&queueLock);
     sem_destroy(&general_lock);
 
     endwin();
@@ -210,12 +204,6 @@ void* prevent_deadlock(void* arg) {
 }
 
 
-bool isPhilosopherInQueue(int i){
-    for (int current: hungerQueue)
-        if (current == i) return true;
-
-    return false;
-}
 
 void draw_interface() {
     sem_wait(&screen_lock);
